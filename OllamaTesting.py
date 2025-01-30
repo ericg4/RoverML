@@ -4,7 +4,9 @@ import numpy as np
 from multiprocessing import Process, Queue, Event
 import multiprocessing
 
-CONTEXT = "Imagine you are a lunar rover with a camera facing forward. Describe any obstacles you see in front of you and their approximate distance and angle in the format 'Table at angle __ approximately __ ft away.'."
+CONTEXT = "Describe any obstacles you see in front of you and their approximate distance and angle to the camera. Also, describe any objects that could be important reference points. "
+
+GOAL = "Drive the rover to the box"
 
 def camera_process(frame_queue: Queue, trigger_event: Event, processing_event: Event, stop_event: Event):
     cap = cv2.VideoCapture(0)
@@ -47,7 +49,16 @@ def inference_process(frame_queue: Queue, trigger_event: Event, processing_event
                     'images': ['temp_frame.jpg']
                 }]
             )
-            print(f"LLM Response: {response['message']['content']}")
+            print(f"Llava Response: {response['message']['content']}")
+
+            response2 = ollama.chat(
+                model='deepseek-r1:7b',
+                messages=[{
+                    'role': 'user',
+                    'content': "Given the context that you are an ai in an autonomous rover and you are trying to reach the goal: " + GOAL + "How can the rover achieve this goal if the image in front of it is described as: " + response['message']['content'] + "Give a specific set of rover instructions in the form of 'Forward 10 inches', 'Turn 90 degrees left', etc.",
+                }]
+            )
+            print(f"deepseek Response: {response2['message']['content']}")
             processing_event.clear()
             trigger_event.clear()
 
