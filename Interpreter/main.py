@@ -8,17 +8,20 @@ from RobotCommandInterpreter import RobotCommandInterpreter
 CONTEXT = """You are an AI assisting a robot.  Your primary task is to identify obstacles and a target object. The robot's goal is to reach a box.
 First, identify the target object (a box).  Then, identify any obstacles that might be in the robot's path.
 
-For each object, provide: name, estimated distance in inches, estimated angle in degrees relative to the robot's center. If any value is not discernible, respond with 'unknown'
+For each object, provide: name, estimated distance in inches, estimated angle relative to the robot's center based on the location left-right in the image formatted in degrees. If any value is not discernible, respond with 'unknown'
 
-Structure your response as follows:
+Format the angle so that 0 degrees is directly ahead, negative values are to the left, and positive values are to the right.
 
-Target Object: [name, distance, angle]
-Obstacles: [list of name, distance, angle]
+Structure your response as follows in json format:
+\{
+"target": \{"name": "box", "distance": "12 inches", "20 degrees" \}
+"obstacles": [\{"name": "obstacle", "distance": "24 inches", "angle": "15 degrees" \}, \{"name": "obstacle", "distance": "unknown", "angle": "unknown" \}]
+\}
 """
 
 GOAL = "Drive the rover to the box"
 
-def camera_process(frame_queue: Queue, trigger_event: Event, processing_event: Event, stop_event: Event):
+def camera_process(frame_queue: Queue, trigger_event: Event, processing_event: Event, stop_event: Event): # type: ignore
     cap = cv2.VideoCapture(0)
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
@@ -34,7 +37,7 @@ def camera_process(frame_queue: Queue, trigger_event: Event, processing_event: E
         
         key = cv2.waitKey(1) & 0xFF
         if key == 32 and not processing_event.is_set():  # Spacebar
-            print("Processing frame...")
+            print("\nProcessing frame...")
             if not frame_queue.full():
                 frame_queue.put(frame)
                 trigger_event.set()
@@ -45,9 +48,7 @@ def camera_process(frame_queue: Queue, trigger_event: Event, processing_event: E
     cap.release()
     cv2.destroyAllWindows()
 
-# Replace the commented-out code in inference_process with this:
-
-def inference_process(frame_queue: Queue, trigger_event: Event, processing_event: Event, stop_event: Event):
+def inference_process(frame_queue: Queue, trigger_event: Event, processing_event: Event, stop_event: Event): # type: ignore
     while not stop_event.is_set():
         if trigger_event.is_set() and not frame_queue.empty():
             frame = frame_queue.get()
@@ -67,8 +68,8 @@ def inference_process(frame_queue: Queue, trigger_event: Event, processing_event
             # Initialize the interpreter with your goal
             interpreter = RobotCommandInterpreter(GOAL)
 
-            # Generate commands
-            commands = interpreter.interpret(llm_output) # Or interpreter.interpret_with_llm(llm_output)
+            # Generate commands using the JSON interpreter
+            commands = interpreter.interpret_json(llm_output)
             print("Robot Commands:", commands)
 
             processing_event.clear()

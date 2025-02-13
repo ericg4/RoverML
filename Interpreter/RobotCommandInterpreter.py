@@ -1,5 +1,6 @@
 import re
 import ollama
+import json
 
 class RobotCommandInterpreter:
     def __init__(self, goal):
@@ -66,15 +67,18 @@ class RobotCommandInterpreter:
                 if distance is None:
                     commands.append("Object Detected but Distance Unknown - STOP")
                     return commands
-                if angle is None:
+                elif angle is None:
                     commands.append("Object Detected but Angle Unknown - STOP")
                     return commands
 
                 if distance > 12:
-                    commands.append(f"Turn {angle} degrees")
+                    if (angle > 15):
+                        commands.append(f"Turn {angle} degrees right")
+                    elif (angle < -15):
+                        commands.append(f"Turn {angle} degrees left")
                     commands.append(f"Forward {distance - 12} inches")  # Approach
                 else:
-                    commands.append("Approach Target")
+                    commands.append(f"Drive forward {distance/2} inches")  # Close enough
                     commands.append("Stop") #At the target, stop
             elif target_object == "obstacle":
                 commands.append("Obstacle Detected - STOP") #If obstacle is detected just stop
@@ -102,3 +106,72 @@ class RobotCommandInterpreter:
             }]
         )
         return [response['message']['content']]
+
+    def _prepare_json_text(self, text):
+        """Clean and prepare raw text for JSON parsing"""
+        # Remove any markdown code block markers
+        text = re.sub(r'```json\s*|\s*```', '', text)
+        
+        # Find the first '{' and last '}' to extract just the JSON part
+        start = text.find('{')
+        end = text.rfind('}')
+        if start != -1 and end != -1:
+            text = text[start:end+1]
+        
+        # Replace single quotes with double quotes
+        text = text.replace("'", '"')
+        
+        # Fix common formatting issues
+        text = re.sub(r'(\w+):', r'"\1":', text)  # Add quotes around keys
+        text = text.replace('None', 'null')        # Replace Python None with JSON null
+        text = text.replace('True', 'true')        # Replace Python True with JSON true
+        text = text.replace('False', 'false')      # Replace Python False with JSON false
+        
+        return text
+
+    def interpret_json(self, llm_output):
+        """Interprets JSON-formatted LLM output and generates robot commands."""
+        commands = []
+        
+        try:
+            # Clean and parse JSON response
+            cleaned_json = self._prepare_json_text(llm_output)
+            print("Cleaned JSON:", cleaned_json)
+            data = json.loads(cleaned_json)
+            
+            # Handle target object
+            if "target" in data and data["target"]:
+                target = data["target"]
+                target_distance = self.parse_distance(target.get("distance", "unknown"))
+                target_angle = self.parse_angle(target.get("angle", "unknown"))
+                
+                if target["name"] == "box":
+                    if target_distance is None or target_angle is None:
+                        commands.append("Target detected but position unclear - STOP")
+                    else:
+                        if target_distance > 12:
+                            if abs(target_angle) > 15:
+                                commands.append(f"Turn {'right' if target_angle > 0 else 'left'} {abs(target_angle)} degrees")
+                            commands.append(f"Forward {target_distance - 12} inches")
+                        else:
+                            commands.append(f"Approach forward about {target_distance} inches")
+                            commands.append(f"Stop - {target["name"]} reached")
+
+            # Handle obstacles
+            if "obstacles" in data:
+                for obstacle in data["obstacles"]:
+                    obstacle_distance = self.parse_distance(obstacle.get("distance", "unknown"))
+                    obstacle_angle = self.parse_angle(obstacle.get("angle", "unknown"))
+                    
+                    if obstacle_distance and obstacle_distance < 24:  # If obstacle is within 2 feet
+                        commands.append(f"Warning: Obstacle at {obstacle_distance} inches, {obstacle_angle} degrees")
+                        if abs(obstacle_angle) < 30:  # If obstacle is roughly ahead
+                            commands.append("Stop - Obstacle in path")
+                            return commands  # Priority to avoid obstacles
+
+        except json.JSONDecodeError:
+            commands.append("Error: Could not parse LLM response")
+        except Exception as e:
+            commands.append(f"Error: {str(e)}")
+
+        return commands if commands else ["No actionable commands - Continue scanning"]

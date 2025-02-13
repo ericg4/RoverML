@@ -7,7 +7,7 @@ import multiprocessing
 CONTEXT = "Describe any obstacles you see in front of you and their approximate distance and angle to the camera. Also, describe any objects that could be important reference points. "
 GOAL = "Drive the rover to the box"
 
-def camera_process(frame_queue: Queue, trigger_event: Event, processing_event: Event, stop_event: Event):
+def camera_process(frame_queue: Queue, trigger_event: Event, processing_event: Event, stop_event: Event): # type: ignore
     cap = cv2.VideoCapture(0)
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
@@ -34,7 +34,7 @@ def camera_process(frame_queue: Queue, trigger_event: Event, processing_event: E
     cap.release()
     cv2.destroyAllWindows()
 
-def inference_process(frame_queue: Queue, trigger_event: Event, processing_event: Event, stop_event: Event):
+def inference_process(frame_queue: Queue, trigger_event: Event, processing_event: Event, stop_event: Event): # type: ignore
     while not stop_event.is_set():
         if trigger_event.is_set() and not frame_queue.empty():
             frame = frame_queue.get()
