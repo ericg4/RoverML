@@ -144,8 +144,11 @@ class RobotCommandInterpreter:
                 target = data["target"]
                 target_distance = self.parse_distance(target.get("distance", "unknown"))
                 target_angle = self.parse_angle(target.get("angle", "unknown"))
+                target_name = target.get("name", "unknown")
                 
-                if target["name"] == "box":
+                # Check if this target matches our goal
+                goal_target = self.goal.split("to the ")[-1].lower()
+                if goal_target in target_name.lower():
                     if target_distance is None or target_angle is None:
                         commands.append("Target detected but position unclear - STOP")
                     else:
@@ -155,7 +158,9 @@ class RobotCommandInterpreter:
                             commands.append(f"Forward {target_distance - 12} inches")
                         else:
                             commands.append(f"Approach forward about {target_distance} inches")
-                            commands.append(f"Stop - {target["name"]} reached")
+                            commands.append(f"Stop - {target_name} reached")
+                else:
+                    commands.append(f"Found {target_name} but looking for {goal_target} - Continue scanning")
 
             # Handle obstacles
             if "obstacles" in data:
