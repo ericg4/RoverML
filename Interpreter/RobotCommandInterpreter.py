@@ -21,31 +21,22 @@ class RobotCommandInterpreter:
 
 
     def parse_distance(self, text):
-        """Extracts distance in inches. Now handles depth-based descriptions."""
-        # First try numerical values
+        """Extracts distance in inches from text"""
+        # First try numerical values with units
         match = re.search(r"(\d+)\s*(inches|in)", text)
         if match:
             return int(match.group(1))
-
-        # Check depth-based descriptions
-        if "very blue" in text.lower() or "darkest blue" in text.lower():
-            return self.distance_map["very far"]
-        elif "blue" in text.lower():
-            return self.distance_map["far"]
-        elif "green" in text.lower():
-            return self.distance_map["medium"]
-        elif "yellow" in text.lower():
-            return self.distance_map["near"]
-        elif "orange" in text.lower():
-            return self.distance_map["close by"]
-        elif "red" in text.lower():
-            return self.distance_map["very close"]
-
-        # Check standard fuzzy terms
+        
+        # Try just a number (assume inches)
+        match = re.search(r"^(\d+)$", text)
+        if match:
+            return int(match.group(1))
+        
+        # Check standard fuzzy terms as fallback
         if text in self.distance_map:
             return self.distance_map[text]
-
-        return None
+        
+        return None  # Could not parse distance
 
     def parse_angle(self, text):
       """Extracts angle in degrees.  Handles numbers + units and fuzzy terms."""
@@ -140,16 +131,36 @@ class RobotCommandInterpreter:
         # Replace single quotes with double quotes
         text = text.replace("'", '"')
         
+        # Handle degree symbols and format angle values properly
+        # First, fix the degree symbol
+        text = re.sub(r'(-?\d+\.\d+)°', r'\1 degrees', text)  # Convert -0.0° to "-0.0 degrees"
+        text = re.sub(r'(-?\d+)°', r'\1 degrees', text)       # Convert -10° to "-10 degrees"
+        
         # Fix common formatting issues
         text = re.sub(r'(\w+):', r'"\1":', text)  # Add quotes around keys
         text = text.replace('None', 'null')        # Replace Python None with JSON null
         text = text.replace('True', 'true')        # Replace Python True with JSON true
         text = text.replace('False', 'false')      # Replace Python False with JSON false
         
+        # Fix quotes around values that already have quotes
+        text = re.sub(r'""-?(\d+(?:\.\d+)?)\s+degrees""', r'"\1 degrees"', text)  # Fix double quotes
+        text = re.sub(r'""([^"]+)""', r'"\1"', text)  # Fix any other double quoted values
+        
+        # Replace placeholder values
+        text = text.replace('"USE THE PRE-COMPUTED VALUE"', '"0 inches"')  # Replace placeholders
+                
+        # Validate JSON structure before returning
+        try:
+            # Simple test to see if it parses
+            json.loads(text)
+        except json.JSONDecodeError as e:
+            print(f"Warning: JSON may still have issues: {str(e)}")
+            print(f"Current JSON string: {text}")
+        
         return text
 
     def interpret_json(self, llm_output):
-        """Interprets JSON-formatted LLM output and generates robot commands."""
+        """Interprets JSON-formatted LLM output with enhanced positional awareness."""
         commands = []
         
         try:
@@ -161,9 +172,13 @@ class RobotCommandInterpreter:
             # Handle target object
             if "target" in data and data["target"]:
                 target = data["target"]
+                target_name = target.get("name", "unknown")
+                target_region = target.get("region", "unknown")
                 target_distance = self.parse_distance(target.get("distance", "unknown"))
                 target_angle = self.parse_angle(target.get("angle", "unknown"))
-                target_name = target.get("name", "unknown")
+                
+                # Print enhanced information
+                print(f"Target: {target_name} in {target_region} region")
                 
                 # Check if this target matches our goal
                 goal_target = self.goal.split("to the ")[-1].lower()
@@ -177,20 +192,32 @@ class RobotCommandInterpreter:
                             commands.append(f"Forward {target_distance - 12} inches")
                         else:
                             commands.append(f"Approach forward about {target_distance} inches")
-                            commands.append(f"Stop - {target_name} reached")
+                            commands.append(f"Stop - {target_name} reached in {target_region} region")
                 else:
                     commands.append(f"Found {target_name} but looking for {goal_target} - Continue scanning")
 
-            # Handle obstacles
+            # Handle obstacles with positional awareness
             if "obstacles" in data:
                 for obstacle in data["obstacles"]:
                     obstacle_distance = self.parse_distance(obstacle.get("distance", "unknown"))
                     obstacle_angle = self.parse_angle(obstacle.get("angle", "unknown"))
+                    obstacle_region = obstacle.get("region", "unknown")
                     
                     if obstacle_distance and obstacle_distance < 24:  # If obstacle is within 2 feet
-                        commands.append(f"Warning: Obstacle at {obstacle_distance} inches, {obstacle_angle} degrees")
-                        if abs(obstacle_angle) < 30:  # If obstacle is roughly ahead
+                        commands.append(f"Warning: {obstacle.get('name', 'Obstacle')} at {obstacle_distance} inches, {obstacle_angle} degrees in {obstacle_region}")
+                        
+                        # Enhanced obstacle avoidance based on position
+                        if abs(obstacle_angle) < 20:  # Directly ahead
                             commands.append("Stop - Obstacle in path")
+                            
+                            # Suggest direction to turn based on obstacle position
+                            if obstacle_region and "left" in obstacle_region:
+                                commands.append("Recommend: Turn right to avoid")
+                            elif obstacle_region and "right" in obstacle_region:
+                                commands.append("Recommend: Turn left to avoid")
+                            else:
+                                commands.append("Recommend: Back up and try different approach")
+                            
                             return commands  # Priority to avoid obstacles
 
         except json.JSONDecodeError:
