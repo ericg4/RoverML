@@ -6,9 +6,12 @@ class RobotCommandInterpreter:
     def __init__(self, goal):
         self.goal = goal
         self.distance_map = {  # fuzzy distance terms
-            "close by": 12,  # inches
-            "near": 24,      # inches
-            "far": 60        # inches
+            "close by": 12,    # inches
+            "near": 24,        # inches
+            "far": 60,         # inches
+            "very close": 6,   # inches
+            "medium": 36,      # inches
+            "very far": 120    # inches
         }
         self.angle_map = {  # fuzzy angle terms
             "slightly left": -15, # degrees
@@ -18,15 +21,31 @@ class RobotCommandInterpreter:
 
 
     def parse_distance(self, text):
-      """Extracts distance in inches.  Handles numbers + units and fuzzy terms."""
-      match = re.search(r"(\d+)\s*(inches|in)", text) #regex to find numbers followed by inches or in
-      if match:
-          return int(match.group(1))
+        """Extracts distance in inches. Now handles depth-based descriptions."""
+        # First try numerical values
+        match = re.search(r"(\d+)\s*(inches|in)", text)
+        if match:
+            return int(match.group(1))
 
-      if text in self.distance_map:
-          return self.distance_map[text]
+        # Check depth-based descriptions
+        if "very blue" in text.lower() or "darkest blue" in text.lower():
+            return self.distance_map["very far"]
+        elif "blue" in text.lower():
+            return self.distance_map["far"]
+        elif "green" in text.lower():
+            return self.distance_map["medium"]
+        elif "yellow" in text.lower():
+            return self.distance_map["near"]
+        elif "orange" in text.lower():
+            return self.distance_map["close by"]
+        elif "red" in text.lower():
+            return self.distance_map["very close"]
 
-      return None  # Could not parse distance
+        # Check standard fuzzy terms
+        if text in self.distance_map:
+            return self.distance_map[text]
+
+        return None
 
     def parse_angle(self, text):
       """Extracts angle in degrees.  Handles numbers + units and fuzzy terms."""

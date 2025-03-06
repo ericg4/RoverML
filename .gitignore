@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+*.pyo
+temp_depth.jpg
+temp_frame.jpg
+checkpoints/
