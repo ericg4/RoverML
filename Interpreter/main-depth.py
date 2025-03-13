@@ -95,7 +95,7 @@ def add_position_grid(image):
         x = w * i // (len(angles) - 1)
         cv2.line(grid_img, (x, 0), (x, h), (255, 255, 255), 1)
         cv2.putText(grid_img, f"{angle}°", (x-15, h-10), 
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
     
     return grid_img
 
