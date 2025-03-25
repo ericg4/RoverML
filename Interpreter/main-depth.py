@@ -61,7 +61,7 @@ IMPORTANT: For each object you identify, you MUST:
 Structure your response as follows in json format:
 {
 "target": {"name": "___", "region": "___", "angle": "__ degrees", "distance": "__ inches"},
-"obstacles": [{"name": "chair", "region": "middle-left", "angle": "-15 degrees", "distance": "24 inches"}]
+"obstacles": [{"name": "__", "region": "__", "angle": "__ degrees", "distance": "__ inches"}]
 }
 '''
 
@@ -149,7 +149,7 @@ def process_depth(frame):
     """Process frame through depth model and save both images"""
     if depth_model is None:
         print("! Depth model not available")
-        return None, None, frame, frame, []
+        return None, None, frame, frame, [], None
     
     print("  Processing depth...")
     rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -158,6 +158,15 @@ def process_depth(frame):
     
     prediction = depth_model.infer(image_tensor)
     depth = prediction["depth"].detach().cpu().numpy().squeeze()
+
+    # Store the raw depth values (before any normalization)
+    raw_depth = depth.copy()
+    
+    # Create visualization of raw depth values
+    raw_depth_viz = create_raw_depth_visualization(raw_depth, None)
+    
+    # Save raw depth visualization
+    cv2.imwrite('temp_raw_depth.jpg', raw_depth_viz)
     
     # Normalize depth for visualization
     inverse_depth = 1 / depth
@@ -193,7 +202,7 @@ def process_depth(frame):
                     (center_x-20, center_y+15),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.3, (255, 255, 255), 1)
     
-    return depth_colormap, depth_normalized, frame_with_grid, depth_map_with_grid, depth_regions
+    return depth_colormap, depth_normalized, frame_with_grid, depth_map_with_grid, depth_regions, raw_depth_viz
 
 def camera_process(frame_queue: Queue, trigger_event: Event, processing_event: Event, stop_event: Event): # type: ignore
     print("Starting camera process...")
@@ -273,13 +282,16 @@ def inference_process(frame_queue: Queue, trigger_event: Event, processing_event
             
             # Process images with grid overlays
             print("1. Generating depth map...")
-            depth_map, _, frame_with_grid, depth_with_grid, depth_regions = process_depth(frame)
+            depth_map, _, frame_with_grid, depth_with_grid, depth_regions, raw_depth_viz = process_depth(frame)
             
-            # Save both images with grid overlays
+            # Save images with grid overlays
             print("2. Saving processed images...")
             cv2.imwrite('temp_frame.jpg', frame_with_grid)
             if depth_with_grid is not None:
                 cv2.imwrite('temp_depth.jpg', depth_with_grid)
+            if raw_depth_viz is not None:
+                cv2.imwrite('temp_raw_depth.jpg', raw_depth_viz)
+                print("   Raw depth visualization saved as temp_raw_depth.jpg")
             
             # Create depth region summary with enhanced distance information
             print("3. Analyzing depth regions...")
@@ -332,6 +344,72 @@ def inference_process(frame_queue: Queue, trigger_event: Event, processing_event
             print("--- Processing complete ---\n")
     
     print("Inference process stopped.")
+
+
+# chad added this
+# visualize raw depth values
+def create_raw_depth_visualization(raw_depth, normalized_depth=None):
+    """Create visualization of raw depth values from depth model"""
+    h, w = raw_depth.shape
+    
+    # Calculate some statistics
+    min_val = np.min(raw_depth)
+    max_val = np.max(raw_depth)
+    mean_val = np.mean(raw_depth)
+    median_val = np.median(raw_depth)
+    
+    # Create a normalized version for visualization (different color map)
+    # This shows raw values, not inverse depth
+    raw_viz = cv2.applyColorMap(
+        (((raw_depth - min_val) / (max_val - min_val)) * 255).astype(np.uint8),
+        cv2.COLORMAP_VIRIDIS
+    )
+    
+    # Add raw depth overlays to regions
+    region_h, region_w = h // 3, w // 3
+    for y in range(3):
+        for x in range(3):
+            y1, y2 = y * region_h, (y + 1) * region_h
+            x1, x2 = x * region_w, (x + 1) * region_w
+            
+            # Calculate center of this region
+            center_x = int((x1 + x2) / 2)
+            center_y = int((y1 + y2) / 2)
+            
+            # Get raw depth value for this region
+            region_raw = raw_depth[y1:y2, x1:x2]
+            region_mean = float(np.mean(region_raw))
+            
+            # Display raw value
+            raw_text = f"raw: {region_mean:.5f}"
+            cv2.putText(raw_viz, raw_text, 
+                        (center_x-35, center_y-5),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.3, (255, 255, 255), 1)
+            
+            # Display normalized value if available
+            if normalized_depth is not None:
+                region_norm = normalized_depth[y1:y2, x1:x2]
+                norm_mean = float(np.mean(region_norm))
+                norm_text = f"norm: {norm_mean:.3f}"
+                cv2.putText(raw_viz, norm_text, 
+                            (center_x-35, center_y+10),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.3, (255, 255, 255), 1)
+            
+            # Add estimated distance based on raw depth
+            # This can help understand if raw depth directly correlates with distance
+            est_distance = 1.0 / region_mean if region_mean > 0 else 0
+            dist_text = f"est: {est_distance:.2f}"
+            cv2.putText(raw_viz, dist_text, 
+                        (center_x-35, center_y+10 if normalized_depth is None else center_y+25),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.3, (255, 255, 255), 1)
+    
+    # Add overall statistics
+    cv2.putText(raw_viz, f"Raw Depth Range: {min_val:.5f} - {max_val:.5f}", 
+                (10, 15), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
+    cv2.putText(raw_viz, f"Mean: {mean_val:.5f}, Median: {median_val:.5f}", 
+                (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
+    
+    return raw_viz
 
 def main():
     print("\n=== RoverML System Initializing ===")
