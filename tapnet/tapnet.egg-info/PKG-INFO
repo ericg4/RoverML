@@ -1,0 +1,50 @@
+Metadata-Version: 2.2
+Name: tapnet
+Version: 0.1.0
+Summary: Tracking-Any-Point codebase from Google DeepMind.
+License-File: LICENSE
+Requires-Dist: chex
+Requires-Dist: jax
+Requires-Dist: jaxline
+Requires-Dist: optax
+Requires-Dist: dm-haiku
+Requires-Dist: dm-tree
+Requires-Dist: typing_extensions
+Requires-Dist: matplotlib
+Requires-Dist: mediapy
+Requires-Dist: opencv-python
+Requires-Dist: einshape
+Requires-Dist: ipympl
+Requires-Dist: tqdm
+Provides-Extra: train
+Requires-Dist: absl-py; extra == "train"
+Requires-Dist: notebook; extra == "train"
+Requires-Dist: jupyter_http_over_ws; extra == "train"
+Requires-Dist: tensorflow; extra == "train"
+Requires-Dist: tensorflow-datasets; extra == "train"
+Requires-Dist: tensorflow_graphics; extra == "train"
+Requires-Dist: kubric@ git+https://github.com/google-research/kubric ; extra == "train"
+Requires-Dist: recurrentgemma@ git+https://github.com/google-deepmind/recurrentgemma ; extra == "train"
+Provides-Extra: torch
+Requires-Dist: torch; extra == "torch"
+Requires-Dist: torchvision; extra == "torch"
+Provides-Extra: tapvid3d-eval
+Requires-Dist: einops>=0.8.0; extra == "tapvid3d-eval"
+Requires-Dist: numpy>=1.25.2; extra == "tapvid3d-eval"
+Requires-Dist: absl-py>=2.1.0; extra == "tapvid3d-eval"
+Requires-Dist: tqdm>=4.66.4; extra == "tapvid3d-eval"
+Requires-Dist: pillow>=9.4.0; extra == "tapvid3d-eval"
+Provides-Extra: tapvid3d-generation
+Requires-Dist: absl-py==2.1.0; extra == "tapvid3d-generation"
+Requires-Dist: tqdm==4.66.4; extra == "tapvid3d-generation"
+Requires-Dist: absl-py==2.1.0; extra == "tapvid3d-generation"
+Requires-Dist: tqdm==4.66.4; extra == "tapvid3d-generation"
+Requires-Dist: tensorflow==2.15.0; extra == "tapvid3d-generation"
+Requires-Dist: numpy==1.25.2; extra == "tapvid3d-generation"
+Requires-Dist: pillow==9.4.0; extra == "tapvid3d-generation"
+Requires-Dist: projectaria-tools==1.5.2; extra == "tapvid3d-generation"
+Requires-Dist: visu3d==1.5.3; extra == "tapvid3d-generation"
+Requires-Dist: torch==2.3.0; extra == "tapvid3d-generation"
+Requires-Dist: torchvision==0.18.0; extra == "tapvid3d-generation"
+Requires-Dist: etils==1.7.0; extra == "tapvid3d-generation"
+Requires-Dist: tensorflow-datasets; extra == "tapvid3d-generation"
