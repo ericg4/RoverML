@@ -54,14 +54,14 @@ First, identify the target object. Then, identify any obstacles that might be in
 
 IMPORTANT: For each object you identify, you MUST:
 1. name: state what the object is
-2. region: specify which region contains this object (e.g., "bottom-right", "middle-center")
+2. region: specify which region contains this object (e.g., "top-left", "middle-center", "bottom-right", "bottom-center", "bottom-left", "top-center", "top-right", "middle-left", "middle-right")
 3. angle: state the angle relative to center (e.g., "-15 degrees")
 4. distance: COPY THE EXACT NUMERICAL DISTANCE IN INCHES I provided for the region where the object is located
 
 Structure your response as follows in json format:
 {
 "target": {"name": "___", "region": "___", "angle": "__ degrees", "distance": "__ inches"},
-"obstacles": [{"name": "chair", "region": "middle-left", "angle": "-15 degrees", "distance": "24 inches"}]
+"obstacles": [{"name": "___", "region": "___", "angle": "__ degrees", "distance": "__ inches"}]
 }
 '''
 

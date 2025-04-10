@@ -1,3 +1,4 @@
+import math
 import re
 import ollama
 import json
@@ -18,6 +19,51 @@ class RobotCommandInterpreter:
             "slightly right": 15,  # degrees
             "directly ahead": 0
         }
+        
+        self.WHEELBASE = 0.3  # meters
+        self.DEFAULT_VELOCITY = 0.2  # default linear velocity in m/s
+
+    def inches_to_meters(self, inches):
+        """Convert inches to meters"""
+        return inches * 0.0254
+        
+    def degrees_to_radians(self, degrees):
+        """Convert degrees to radians"""
+        return degrees * math.pi / 180
+
+    def compute_arc_wheel_speeds(self, d, theta, L, v):
+        """
+        Compute left and right wheel speeds for arc-based motion.
+
+        Parameters:
+        - d (float): distance to target (in meters)
+        - theta (float): angle to target (in radians, positive = right)
+        - L (float): wheelbase width (distance between wheels in meters)
+        - v (float): desired linear speed of the robot's center (in m/s)
+
+        Returns:
+        - v_l (float): left wheel speed (in m/s)
+        - v_r (float): right wheel speed (in m/s)
+        - t (float): time to reach the target point (in seconds)
+        """
+        # Handle straight-line case to avoid division by zero
+        if abs(theta) < 1e-6:
+            v_l = v_r = v
+            t = d / v
+            return v_l, v_r, t
+
+        # Radius of the arc to follow
+        R = d / (2 * math.sin(theta))
+
+        # Compute individual wheel speeds
+        v_l = v * ((R - (L / 2)) / R)
+        v_r = v * ((R + (L / 2)) / R)
+
+        # Arc length = R * |theta|, time = arc length / v
+        arc_length = abs(R * theta)
+        t = arc_length / v
+
+        return v_l, v_r, t
 
 
     def parse_distance(self, text):
@@ -71,7 +117,7 @@ class RobotCommandInterpreter:
         distance = self.parse_distance(llm_output)
         angle = self.parse_angle(llm_output)
 
-        # 3. Goal-Oriented Actions (Example)
+        # 3. Goal-Oriented Actions with wheel speed calculations
         if self.goal == "Drive the rover to the box":
             if target_object == "box":
                 if distance is None:
@@ -81,22 +127,27 @@ class RobotCommandInterpreter:
                     commands.append("Object Detected but Angle Unknown - STOP")
                     return commands
 
-                if distance > 12:
-                    if (angle > 15):
-                        commands.append(f"Turn {angle} degrees right")
-                    elif (angle < -15):
-                        commands.append(f"Turn {angle} degrees left")
-                    commands.append(f"Forward {distance - 12} inches")  # Approach
-                else:
-                    commands.append(f"Drive forward {distance/2} inches")  # Close enough
-                    commands.append("Stop") #At the target, stop
+                # Convert units for calculation
+                distance_m = self.inches_to_meters(distance)
+                angle_rad = self.degrees_to_radians(angle)
+                
+                # Calculate wheel speeds and time
+                v_left, v_right, t = self.compute_arc_wheel_speeds(
+                    distance_m, angle_rad, self.WHEELBASE, self.DEFAULT_VELOCITY
+                )
+                
+                commands.append(f"Left wheel: {v_left:.2f} m/s, Right wheel: {v_right:.2f} m/s, Time: {t:.2f} s")
+                
+                if distance <= 12:
+                    commands.append("Stop - Target reached")  # At the target, stop
+            
             elif target_object == "obstacle":
-                commands.append("Obstacle Detected - STOP") #If obstacle is detected just stop
+                commands.append("Obstacle Detected - STOP") # If obstacle is detected just stop
 
             else:
                 commands.append("Target not found - Scan")
         else:
-            commands.append("Unknown goal.  Cannot interpret.")
+            commands.append("Unknown goal. Cannot interpret.")
 
         return commands
 
@@ -186,12 +237,18 @@ class RobotCommandInterpreter:
                     if target_distance is None or target_angle is None:
                         commands.append("Target detected but position unclear - STOP")
                     else:
-                        if target_distance > 12:
-                            if abs(target_angle) > 15:
-                                commands.append(f"Turn {'right' if target_angle > 0 else 'left'} {abs(target_angle)} degrees")
-                            commands.append(f"Forward {target_distance - 12} inches")
-                        else:
-                            commands.append(f"Approach forward about {target_distance} inches")
+                        # Convert units for calculation
+                        distance_m = self.inches_to_meters(target_distance)
+                        angle_rad = self.degrees_to_radians(target_angle)
+                        
+                        # Calculate wheel speeds and time
+                        v_left, v_right, t = self.compute_arc_wheel_speeds(
+                            distance_m, angle_rad, self.WHEELBASE, self.DEFAULT_VELOCITY
+                        )
+                        
+                        commands.append(f"Left wheel: {v_left:.2f} m/s, Right wheel: {v_right:.2f} m/s, Time: {t:.2f} s")
+                        
+                        if target_distance <= 12:
                             commands.append(f"Stop - {target_name} reached in {target_region} region")
                 else:
                     commands.append(f"Found {target_name} but looking for {goal_target} - Continue scanning")
@@ -205,20 +262,8 @@ class RobotCommandInterpreter:
                     
                     if obstacle_distance and obstacle_distance < 24:  # If obstacle is within 2 feet
                         commands.append(f"Warning: {obstacle.get('name', 'Obstacle')} at {obstacle_distance} inches, {obstacle_angle} degrees in {obstacle_region}")
-                        
-                        # Enhanced obstacle avoidance based on position
-                        if abs(obstacle_angle) < 20:  # Directly ahead
-                            commands.append("Stop - Obstacle in path")
-                            
-                            # Suggest direction to turn based on obstacle position
-                            if obstacle_region and "left" in obstacle_region:
-                                commands.append("Recommend: Turn right to avoid")
-                            elif obstacle_region and "right" in obstacle_region:
-                                commands.append("Recommend: Turn left to avoid")
-                            else:
-                                commands.append("Recommend: Back up and try different approach")
-                            
-                            return commands  # Priority to avoid obstacles
+                        commands.append("Stop - Obstacle in path")
+                        return commands  # Priority to avoid obstacles
 
         except json.JSONDecodeError:
             commands.append("Error: Could not parse LLM response")
