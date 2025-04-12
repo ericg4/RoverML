@@ -1,8 +1,19 @@
+# Copyright 2025 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ==============================================================================
 
-# ---- Rocky's note ----
-# This is works on my environment. It need a powerful GPU on a Linux or MacOS. 
-# Incorporating the lava
-# Need to feed image into lava. Need to figure out how inference_process works in OllamaTesting.
+"""Live Demo for Online TAPIR."""
 
 import time
 
@@ -13,25 +24,7 @@ import numpy as np
 from tapnet.models import tapir_model
 from tapnet.utils import model_utils
 
-# modules for lava
-import ollama
 
-CONTEXT = '''You are an AI in an autonomous rover. 
-You will be given a series of pictures taken from the rover's camera at the front.
-In the picture, there will be a blue dot selected by the user. The blue dot represents the destination of the rover.
-You need to determine the direction and distance of the blue dot to control the rover.
-IMPORTANT: For each image, you must verbally describe the following:
-1. determine where the ground is in the image. 
-2. determine the target object in the image where the blue dot is attaching to. 
-3. describe the target object's location on the ground
-4. determine the distance between the rover and the target object. 
-5. determine the direction of the rover to the target object with respect to ground. 
-6. determine any obstacles between the rover and the target object on the ground. 
-
-Then, you must give the rover a command to move towards the target object indicated by the blue dot on the image. 
-The command should include the distance and direction on the ground plane the rover should move.
-'''
-GOAL = "Drive a rover to the point"
 NUM_POINTS = 8
 
 
@@ -44,7 +37,7 @@ print("Loading checkpoint...")
 # Load checkpoint and initialize
 params, state = load_checkpoint(
     "tapnet/checkpoints/causal_tapir_checkpoint.npy"
-) # Need to modify the checkpoint paths. 
+)
 
 tapir = tapir_model.ParameterizedTAPIR(
     params=params,
@@ -93,6 +86,10 @@ def get_frame(video_capture):
     image = image[trunc:-trunc]
   return r_val, image
 
+
+print("Welcome to the TAPIR live demo.")
+print("Please note that if the framerate is low (<~12 fps), TAPIR performance")
+print("may degrade and you may need a more powerful GPU.")
 
 print("Creating model...")
 online_init_apply = jax.jit(online_model_init)
@@ -169,9 +166,6 @@ step_counter = 0
 
 print("Press ESC to exit.")
 
-last_save_time = time.time() # We will keep track of the time so every a few seconds we output an image for lava. 
-check_interval = 10 # Defines the interval to feed image to lava. 
-
 while rval:
   rval, frame = get_frame(vc)
   if query_frame:
@@ -201,8 +195,6 @@ while rval:
     expected_dist = prediction["expected_dist"][0, :, 0]
     visibles = model_utils.postprocess_occlusions(occlusion, expected_dist)
     track = np.round(track)
-    #print("variable track",track)
-    #print("variable track", track[1])
 
     for i, _ in enumerate(have_point):
       if visibles[i] and have_point[i]:
@@ -211,23 +203,6 @@ while rval:
         )
         if track[i, 0] < 16 and track[i, 1] < 16:
           print((i, next_query_idx))
-  
-  # Save the frame every interval (user_defined before) with the tracked dots
-  if time.time() - last_save_time >= check_interval:
-      filename = f"tracked_frame_{int(time.time())}.png"
-      cv2.imwrite(filename, frame)
-      print(f"Saved image: {filename}")
-      last_save_time = time.time()
-      # llava inference
-      response = ollama.chat(
-                model='llava',
-                messages=[{
-                    'role': 'user',
-                    'content': CONTEXT,
-                    'images': [filename]
-                }]
-            )
-      print(f"Llava Response: {response['message']['content']}")
   cv2.imshow("Point Tracking", frame[:, ::-1])
   if pos:
     step_counter += 1
@@ -242,5 +217,5 @@ while rval:
   if key == 27:  # exit on ESC
     break
 
-#cv2.destroyWindow("Point Tracking")
+cv2.destroyWindow("Point Tracking")
 vc.release()
